@@ -12,15 +12,15 @@ public class MemberNicknameHistory {
 
     private final Long memberId;
 
-    private final String name;
+    private final String nickname;
 
     private final LocalDateTime createdAt;
 
     @Builder
-    public MemberNicknameHistory(Long id, Long memberId, String name, LocalDateTime createdAt) {
+    public MemberNicknameHistory(Long id, Long memberId, String nickname, LocalDateTime createdAt) {
         this.id = id;
         this.memberId = Objects.requireNonNull(memberId);
-        this.name = Objects.requireNonNull(name);
+        this.nickname = Objects.requireNonNull(nickname);
         this.createdAt = createdAt == null ? LocalDateTime.now() : createdAt;
     }
 }
