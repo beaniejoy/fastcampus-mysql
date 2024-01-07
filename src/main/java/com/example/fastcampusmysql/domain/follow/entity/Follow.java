@@ -16,7 +16,12 @@ public class Follow {
     private final LocalDateTime createdAt;
 
     @Builder
-    public Follow(Long id, Long fromMemberId, Long toMemberId, LocalDateTime createdAt) {
+    public Follow(
+        Long id,
+        Long fromMemberId,
+        Long toMemberId,
+        LocalDateTime createdAt
+    ) {
         this.id = id;
         this.fromMemberId = Objects.requireNonNull(fromMemberId);
         this.toMemberId = Objects.requireNonNull(toMemberId);

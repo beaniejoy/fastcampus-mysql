@@ -3,6 +3,7 @@ package com.example.fastcampusmysql.domain.member.repository;
 import com.example.fastcampusmysql.domain.member.entity.Member;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
@@ -20,21 +21,20 @@ public class MemberRepository {
 
     final private NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
-    public Optional<Member> findById(Long id) {
+    private static final RowMapper<Member> ROW_MAPPER = (rs, rowNum) -> Member.builder()
+        .id(rs.getLong("id"))
+        .email(rs.getString("email"))
+        .nickname(rs.getString("nickname"))
+        .birthday(rs.getObject("birthday", LocalDate.class))
+        .createdAt(rs.getObject("createdAt", LocalDateTime.class))
+        .build();
 
+    public Optional<Member> findById(Long id) {
         var sql = String.format("SELECT * FROM %s WHERE id = :id", TABLE);
         var params = new MapSqlParameterSource()
             .addValue("id", id);
 
-        RowMapper<Member> rowMapper = (rs, rowNum) -> Member.builder()
-            .id(rs.getLong("id"))
-            .email(rs.getString("email"))
-            .nickname(rs.getString("nickname"))
-            .birthday(rs.getObject("birthday", LocalDate.class))
-            .createdAt(rs.getObject("createdAt", LocalDateTime.class))
-            .build();
-
-        var member = namedParameterJdbcTemplate.queryForObject(sql, params, rowMapper);
+        var member = namedParameterJdbcTemplate.queryForObject(sql, params, ROW_MAPPER);
 
         return Optional.ofNullable(member);
     }
@@ -45,6 +45,16 @@ public class MemberRepository {
         }
 
         return update(member);
+    }
+
+    public List<Member> findAllByIdIn(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        var sql = String.format("SELECT * FROM %s WHERE id in (:ids)", TABLE);
+        var params = new MapSqlParameterSource().addValue("ids", ids);
+        return namedParameterJdbcTemplate.query(sql, params, ROW_MAPPER);
     }
 
     private Member insert(Member member) {

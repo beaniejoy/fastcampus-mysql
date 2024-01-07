@@ -22,6 +22,11 @@ public class MemberReadService {
         return MemberDto.of(memberRepository.findById(id).orElseThrow());
     }
 
+    public List<MemberDto> getMembers(List<Long> ids) {
+        var members = memberRepository.findAllByIdIn(ids);
+        return members.stream().map(MemberDto::of).toList();
+    }
+
     public List<MemberNicknameHistoryDto> getNicknameHistories(Long memberId) {
         return memberNicknameHistoryRepository.findAllByMemberId(memberId)
             .stream()
