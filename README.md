@@ -3,7 +3,15 @@
 ## setup
 
 - mysql 8.0.33 버전 docker container로 생성
+- spring boot 3 version (3.1.2)
+- springdoc-openapi 의존성 변경
 
+```groovy
+implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+```
+**2.1.0에서 java record에 대한 ParameterObject bug fix**  
+2.1.0 이상 사용하려면 webmvc-ui 사용해야 함  
+또한 spring boot v3 이상이어야 하는 듯
 
 ## 필기내용
 
@@ -100,3 +108,52 @@ GROUP BY memberId, createdDate;
 복합 인덱스는 
 첫 번째 칼럼으로 정렬되고 만약 값이 동일하면 두 번째 칼럼으로 정렬되어 인덱스 테이블 저장됨  
 그래서 group by 하면 인덱스만으로도 바로 조회 결과를 만들 수 있다.
+
+### covering index
+
+테이블에 접근하지 않고 인덱스 테이블만으로도 데이터를 응답할 수 있다는 개념  
+
+```sql
+SELECT age, id
+FROM members
+WHERE age < 30
+```
+index: age / pk: id  
+이 상황에서 age 만 조회하거나 age, id만 조회하는 경우 인덱스 테이블 만으로도 조회 가능 (테이블 조회 필요 X)  
+id도 클러스터링 index이기 때문에 index 테이블 마지막 리프 노드에 존재하게 된다.
+
+## Pagination
+
+### offset과 cursor 기반 방식의 차이점
+
+- paging 조회하는 중에 최신 데이터가 업데이트 되면 offset 방식은 첫 번째 페이지에서 밀린 데이터들을 두 번째 페이지에서 중복으로 볼 수 있음
+- cursor 조회는 cursor가 되는 식별자 id 값으로 조회하기 때문에 데이터는 고정
+
+### 커버링 인덱스와 페이지네이션
+
+```mysql
+-- 나이가 30 이하인 회원의 이름을 2개만 조회
+select name
+from members
+where age <= 30
+limit 2
+```
+age가 30이하인 데이터가 1000개라고 한다면 age index table 접근 후 1000개의 데이터를 테이블에서 가져오게 된다.  
+그 이후 limit 2로 잘라서 응답하는 것 같음  
+이렇게 되면 random I/O가 많이 발생 <- 이걸 커버링 인덱스로 보완
+
+```mysql
+with 커버링 as (
+  select id
+  from members
+  where age <= 30
+  limit 2
+)
+
+select name
+from members m
+inner join 커버링 c on c.id = m.id;
+```
+이렇게 해서 가져오면 커버링 인덱스로 id 값 2개를 가져옴  
+random IO를 줄일 수 있음  
+order by, offset, limit 등 불필요한 데이터 블록 접근을 커버링 인덱스로 최소화할 수 있음
