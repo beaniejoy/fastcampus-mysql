@@ -157,3 +157,49 @@ inner join 커버링 c on c.id = m.id;
 이렇게 해서 가져오면 커버링 인덱스로 id 값 2개를 가져옴  
 random IO를 줄일 수 있음  
 order by, offset, limit 등 불필요한 데이터 블록 접근을 커버링 인덱스로 최소화할 수 있음
+
+## Timeline 조회
+
+### Fan Out On Read & Fan Out On Write
+
+- Fan Out On Read (Pull Model)
+
+>조회 시점에 부하가 발생하는 모델  
+
+사용자가 매번 SNS 홈에 접속할 때마다 팔로잉 게시글 피드 조회에 대한 부하가 발생  
+
+```
+log(Follow's_N) + Follwings'_N * log(Post's_N)
+```
+즉 Following 하는 사람들의 수가 많아지면 많아질 수록 부하가 발생  
+**write 성능을 높이고 read 성능을 낮춘 것**  
+**시간복잡도를 희생**
+
+- Fan Out On Write (Push Model)
+
+> 게시물 작성시 해당 회원을 팔로우하는 회원들에게 데이터를 배달  
+
+Timeline 테이블을 따로 구성해서 게시물 작성시에 Follow 테이블에 toMemberId를 기준으로 fromMemberId들을 가져와  
+`fromMemberId, postId(신규 게시물)`로 Timeline 테이블에 저장  
+**즉 write 성능을 다운시키고 read 성능을 높인 것**  
+**공간복잡도를 희생**(별도 테이블이 필요)
+
+참고로 Facebook은 Pull Model을, Twitter는 Push Model을 사용한다고 함(회사마다 전략이 다름)
+
+### 두 개 비교
+
+- Pull Model: 팔로잉 수가 제한되어 있으면 유리
+  - 사용자가 팔로잉하는 사람들의 게시글 피드 조회시 팔로잉 수가 제한되어 있으면 원본 데이터로 가져올 수 있음
+- Push Model: 팔로잉 수가 제한 없을 때 유리
+  - 팔로잉 수가 너무 많으면 매 조회마다 모든 팔로잉 사용자의 게시글을 가져오는 것은 무리
+  - 따로 타임라인 테이블을 만들어 Push해서 조회하는 것이 좋다.
+  - 그러나 정합성에 대한 고민이 있어야 한다.
+  - 게시글 작성시 본인 팔로워가 너무 많으면 push에 무리가 갈 수 있다. (비동기로 풀던가 해야함)
+  - 트랜잭션에 대한 고민이 있어야 한다. 
+    - (게시물 작성 시작할 때의 트랜잭션 동안 모든 팔로워들에게 배달될 때까지 기다려야 올바른가?)
+    - CAP(Consistence, Available, Partition network 3가지 밸런스를 모두 가져갈 수 없다. 두 가지만 가져갈 수 있다.)
+  - Push 모델이 시스템 복잡도가 높다.
+  - 그러나 잘 구현하면 비즈니스, 기술 측면에서 유연성 확보
+    - 기존 게시글 테이블과 관련없이 타임라인 테이블만으로 조회시 정렬에 대한 구현도 할 수 있다.
+
+> 결국 트레이드 오프다. 상황에 따라 최선의 트레이드 오프를 고민해야 한다.

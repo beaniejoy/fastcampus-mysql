@@ -6,6 +6,7 @@ import static org.jeasy.random.FieldPredicates.ofType;
 
 import com.example.fastcampusmysql.domain.post.entity.Post;
 import java.time.LocalDate;
+import java.util.Random;
 import org.jeasy.random.EasyRandom;
 import org.jeasy.random.EasyRandomParameters;
 
@@ -23,7 +24,7 @@ public class PostFixtureFactory {
         var param = new EasyRandomParameters()
             .excludeField(idPredicate)
             .dateRange(firstDate, lastDate)
-            .randomize(memberIdPredicate, () -> memberId);
+            .randomize(memberIdPredicate, () -> new Random().nextLong(1, 5));
 
         return new EasyRandom(param);
     }

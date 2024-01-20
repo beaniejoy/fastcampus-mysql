@@ -1,11 +1,12 @@
 package com.example.fastcampusmysql.application.controller;
 
+import com.example.fastcampusmysql.application.usecase.CreatePostUseCase;
+import com.example.fastcampusmysql.application.usecase.GetTimelinePostsUseCase;
 import com.example.fastcampusmysql.domain.post.dto.DailyPostCount;
 import com.example.fastcampusmysql.domain.post.dto.DailyPostCountRequest;
 import com.example.fastcampusmysql.domain.post.dto.PostCommand;
 import com.example.fastcampusmysql.domain.post.entity.Post;
 import com.example.fastcampusmysql.domain.post.service.PostReadService;
-import com.example.fastcampusmysql.domain.post.service.PostWriteService;
 import com.example.fastcampusmysql.utils.CursorRequest;
 import com.example.fastcampusmysql.utils.PageCursor;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,12 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/posts")
 public class PostController {
 
-    private final PostWriteService postWriteService;
+    private final CreatePostUseCase createPostUseCase;
     private final PostReadService postReadService;
+    private final GetTimelinePostsUseCase getTimelinePostsUseCase;
 
     @PostMapping
     public Long create(PostCommand command) {
-        return postWriteService.create(command);
+        return createPostUseCase.execute(command);
     }
 
     @GetMapping("/daily-post-counts")
@@ -58,4 +60,13 @@ public class PostController {
     ) {
         return postReadService.getPostsByCursor(memberId, cursorRequest);
     }
+
+    @GetMapping("/members/{memberId}/timeline")
+    public PageCursor<Post> getTimeline(
+        @PathVariable("memberId") Long memberId,
+        @ParameterObject @ModelAttribute CursorRequest cursorRequest
+    ) {
+        return getTimelinePostsUseCase.executeByTimeline(memberId, cursorRequest);
+    }
+
 }

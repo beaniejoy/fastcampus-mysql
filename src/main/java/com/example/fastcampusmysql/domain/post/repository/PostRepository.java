@@ -7,6 +7,8 @@ import com.example.fastcampusmysql.domain.post.dto.DailyPostCountRequest;
 import com.example.fastcampusmysql.domain.post.entity.Post;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -108,6 +110,65 @@ public class PostRepository {
             and id < :id
             ORDER BY id DESC
             LIMIT :size
+            """, TABLE);
+
+        return namedParameterJdbcTemplate.query(sql, params, POST_ROW_MAPPER);
+    }
+
+    public List<Post> findAllByInMemberIdsAndOrderByIdDesc(List<Long> memberIds, Long size) {
+        if (memberIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        var params = new MapSqlParameterSource()
+            .addValue("memberIds", memberIds)
+            .addValue("size", size);
+
+        var sql = String.format("""
+            SELECT *
+            FROM %s
+            WHERE memberId IN (:memberIds)
+            ORDER BY id DESC
+            LIMIT :size
+            """, TABLE);
+
+        return namedParameterJdbcTemplate.query(sql, params, POST_ROW_MAPPER);
+    }
+
+    public List<Post> findAllByLessThanIdAndInMemberIdsAndOrderByIdDesc(Long id, List<Long> memberIds, Long size) {
+        if (memberIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        var params = new MapSqlParameterSource()
+            .addValue("memberIds", memberIds)
+            .addValue("id", id)
+            .addValue("size", size);
+
+        var sql = String.format("""
+            SELECT *
+            FROM %s
+            WHERE memberId IN (:memberIds)
+            and id < :id
+            ORDER BY id DESC
+            LIMIT :size
+            """, TABLE);
+
+        return namedParameterJdbcTemplate.query(sql, params, POST_ROW_MAPPER);
+    }
+
+    public List<Post> findAllByInIds(List<Long> ids) {
+        if (ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        var params = new MapSqlParameterSource()
+            .addValue("ids", ids);
+
+        var sql = String.format("""
+            SELECT *
+            FROM %s
+            WHERE id IN (:ids)
             """, TABLE);
 
         return namedParameterJdbcTemplate.query(sql, params, POST_ROW_MAPPER);

@@ -52,3 +52,26 @@ create index POST__index_created_date
 
 create index POST__index_member_id_created_date
     on Post (memberId, createdDate);
+
+create table Timeline
+(
+    id int auto_increment,
+    memberId int not null,
+    postId int not null,
+    createdAt datetime not null,
+    constraint Timeline_id_uindex
+        primary key (id)
+);
+
+create index Timeline__index_member_id_post_id
+    on Timeline (memberId, postId);
+
+create table PostLike
+(
+    id int auto_increment,
+    memberId int not null,
+    postId int not null,
+    createdAt datetime not null,
+    constraint PostLike_id_uindex
+        primary key (id)
+);
