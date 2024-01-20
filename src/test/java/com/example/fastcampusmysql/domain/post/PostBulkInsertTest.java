@@ -5,7 +5,6 @@ import com.example.fastcampusmysql.domain.post.repository.PostRepository;
 import com.example.fastcampusmysql.util.PostFixtureFactory;
 import java.time.LocalDate;
 import java.util.stream.IntStream;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,12 +16,11 @@ public class PostBulkInsertTest {
     @Autowired
     private PostRepository postRepository;
 
-    @Disabled
     @Test
     public void bulkInsert() {
         var easyRandom = PostFixtureFactory.get(
-            1L,
-            LocalDate.of(2023, 12, 1),
+            2L,
+            LocalDate.of(1970, 1, 1),
             LocalDate.of(2024, 1, 1)
         );
 

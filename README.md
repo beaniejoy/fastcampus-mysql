@@ -1,5 +1,10 @@
 # mysql 관련 애플리케이션
 
+## setup
+
+- mysql 8.0.33 버전 docker container로 생성
+
+
 ## 필기내용
 
 `MemberNicknameHistory` 과거 이력 저장 관리하는 Entity  
@@ -44,3 +49,54 @@ DB 성능 핵심은 Disk I/O를 줄이는 것
   - 설령 메모리에 log file이 적재된 상태로 서버가 죽어버려도 서버가 다시 up 될 때 자동으로 log file을 재실행(WAL)
 - **Disk Random I/O를 최소화하는 것**
 
+### 분포도에 따른 인덱스 성능 차이
+
+인덱스 1. memberId, 2. createdDate, 3. (memberId, createdDate)
+
+- **memberId** 인덱스로 타는 경우
+
+```sql
+-- memberId
+--  - 3 : 100만건
+--  - 4 : 200만건
+
+SELECT createdDate, memberId, COUNT(id) AS count
+FROM Post use index POST_index_member_id
+WHERE memberId = ${memberId} AND createdDate between '1900-01-01' and '2023-01-01'
+GROUP BY memberId, createdDate;
+```
+`FROM Post use index [memberId_index] where memberId = 4 ...`  
+memberId 인덱스를 가지고 조회하도록 쿼리 실행하면 오히려 full scan 때보다 많이 걸림  
+`memberId = 4`로 index 테이블에 해당 페이지로 이동해도 200만건이나 되고 거기서 찾아서 스토리지 엔진 접근하고 해야 함  
+(오히려 바로 table full scan 하는 것보다 훨씬 더 오래 걸림, 6배 ~ 13배 차이)
+
+> **인덱스는 해당 칼럼의 데이터 분포도에 영향을 받는다.(카디널리티 관련)**
+
+- **createdDate** 인덱스로 타는 경우
+
+```sql
+-- createdDate
+-- 랜덤 생성했기 때문에 골고루 분포 대략 2만개 정도의 고유 식별 개수를 가짐
+
+SELECT createdDate, memberId, COUNT(id) AS count
+FROM Post use index POST_index_created_date
+WHERE memberId = ${memberId} AND createdDate between '1900-01-01' and '2023-01-01'
+GROUP BY memberId, createdDate;
+```
+`memberId = 4`로 했을 때는 성능이 아주 좋다.  
+`memberId = 1(없는 id)`로 했을 때는 오히려 성능이 아주 안좋아짐  
+group by가 있고 없고가 성능차이가 크다. `memberId = 1` 일 때는 오히려 memberId 인덱스로 조회하는 것이 더 좋다.
+
+> `memberId = 1`에서 왜 성능이 안좋아지는지 이유는 아직 모르겠다
+
+- (memberId, createdDate) 인덱스로 타는 경우
+
+```sql
+SELECT createdDate, memberId, COUNT(id) AS count
+FROM Post use index POST_index_member_id_created_date
+WHERE memberId = ${memberId} AND createdDate between '1900-01-01' and '2023-01-01'
+GROUP BY memberId, createdDate;
+```
+복합 인덱스는 
+첫 번째 칼럼으로 정렬되고 만약 값이 동일하면 두 번째 칼럼으로 정렬되어 인덱스 테이블 저장됨  
+그래서 group by 하면 인덱스만으로도 바로 조회 결과를 만들 수 있다.
