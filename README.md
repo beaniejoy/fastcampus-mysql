@@ -13,6 +13,8 @@ implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
 2.1.0 이상 사용하려면 webmvc-ui 사용해야 함  
 또한 spring boot v3 이상이어야 하는 듯
 
+<br>
+
 ## 필기내용
 
 `MemberNicknameHistory` 과거 이력 저장 관리하는 Entity  
@@ -24,6 +26,8 @@ ex) e-commerce에서 주문내역에 제조사 식별자를 남겨야할 때
 제조사 이름이 바뀔 때 바뀐 제조사의 이름으로 이전에 주문내역도 갱신을 해야할지  
 아니면 그대로 내버려 두어 과거 데이터로 남겨둘지 기획 단계에서 고려 필요    
 -> **데이터가 최신성을 고려해야할지 과거로 남겨야할지**
+
+<br>
 
 ## 정규화 내용
 
@@ -44,6 +48,8 @@ ex) e-commerce에서 주문내역에 제조사 식별자를 남겨야할 때
     - 하나의 테이블 변경이 일어날 때 여러 테이블에 영향을 줄 수 있고
     - fk로 인해 데드락이슈도 발생 가능(?) > 이건 좀 찾아봐야할 듯
   - 조회시 성능이 좋은 별도 DB나 캐싱등 다양한 최적화 기법을 이용할 수 있음
+
+<br>
 
 ## Index
 
@@ -122,6 +128,8 @@ index: age / pk: id
 이 상황에서 age 만 조회하거나 age, id만 조회하는 경우 인덱스 테이블 만으로도 조회 가능 (테이블 조회 필요 X)  
 id도 클러스터링 index이기 때문에 index 테이블 마지막 리프 노드에 존재하게 된다.
 
+<br>
+
 ## Pagination
 
 ### offset과 cursor 기반 방식의 차이점
@@ -158,6 +166,8 @@ inner join 커버링 c on c.id = m.id;
 random IO를 줄일 수 있음  
 order by, offset, limit 등 불필요한 데이터 블록 접근을 커버링 인덱스로 최소화할 수 있음
 
+<br>
+
 ## Timeline 조회
 
 ### Fan Out On Read & Fan Out On Write
@@ -186,7 +196,7 @@ Timeline 테이블을 따로 구성해서 게시물 작성시에 Follow 테이�
 
 참고로 Facebook은 Pull Model을, Twitter는 Push Model을 사용한다고 함(회사마다 전략이 다름)
 
-### 두 개 비교
+### 두 개 비교  
 
 - Pull Model: 팔로잉 수가 제한되어 있으면 유리
   - 사용자가 팔로잉하는 사람들의 게시글 피드 조회시 팔로잉 수가 제한되어 있으면 원본 데이터로 가져올 수 있음
@@ -197,9 +207,68 @@ Timeline 테이블을 따로 구성해서 게시물 작성시에 Follow 테이�
   - 게시글 작성시 본인 팔로워가 너무 많으면 push에 무리가 갈 수 있다. (비동기로 풀던가 해야함)
   - 트랜잭션에 대한 고민이 있어야 한다. 
     - (게시물 작성 시작할 때의 트랜잭션 동안 모든 팔로워들에게 배달될 때까지 기다려야 올바른가?)
-    - CAP(Consistence, Available, Partition network 3가지 밸런스를 모두 가져갈 수 없다. 두 가지만 가져갈 수 있다.)
+    - **CAP**(Consistence, Available, Partition network) 3가지 밸런스를 모두 가져갈 수 없다. 두 가지만 가져갈 수 있다.
   - Push 모델이 시스템 복잡도가 높다.
   - 그러나 잘 구현하면 비즈니스, 기술 측면에서 유연성 확보
     - 기존 게시글 테이블과 관련없이 타임라인 테이블만으로 조회시 정렬에 대한 구현도 할 수 있다.
 
 > 결국 트레이드 오프다. 상황에 따라 최선의 트레이드 오프를 고민해야 한다.
+
+<br>
+
+## Isolation
+
+> InnoDB 기준
+
+Dirty Read, Non Repeatable Read, Phantom Read 세 가지 문제로 격리레벨이 나오게 됨
+
+- Dirty Read
+  - 커밋되지 않은 데이터를 다른 tx에서 읽어들이는 상황
+- Non Repeatable Read
+  - 같은 데이터를 반복해서 read하는데 중간에 commit되어 바뀐 데이터가 있으면 달라진 데이터를 읽게 됨
+- Phantom Read
+  - 같은 조건으로 조회하는데 처음에는 조회되지 않았다가 다른 tx에서 update(혹은 insert, delete)가 되어 이후에 같은 조건으로 조회시 데이터가 존재하게 되는 경우
+
+> 3가지 문제 외에도 다른 이상 현상들이 존재(lost updated, left(right) skewed 등)
+
+위의 3가지 문제를 해결하기 위해 다음의 격리수준을 지원
+
+- READ UNCOMMITTED
+- READ COMMITTED
+- REPEATABLE READ
+- SERIALIZABLE READ
+
+<br>
+
+## 동시성 제어하기
+
+MySQL에서의 record lock은 인덱스 테이블 기반의 lock이다. (중요)  
+그래서 인덱스가 아닌 칼럼을 기준으로 where 절 조회시 의도치 않은 다른 record에 lock이 발생할 수 있다.
+
+```sql
+-- 데이터 2건 조회
+SELECT * FROM POST WHERE memberId = 1 and contents = 'string';
+```
+```sql
+START TRANSACTION;
+SELECT * FROM POST WHERE memberId = 1 and contents = 'string' FOR UPDATE; -- X lock
+
+select * from performance_schema.data_locks; -- lock 종류와 lock 걸린 데이터 조회
+select * from performance_schema.innodb_trx; -- transaction 여부 판단
+```
+위에 commit 하기전에 X lock을 걸게 되면 2건의 데이터에만 락이 걸리는 것이 아니라 4건이 걸리게 된다.  
+(memberId만 인덱스이기 때문에 `memberId = 1`에 해당하는 데이터들이 락이 걸리게 됨)
+
+> MySQL에서 lock 걸 때 index를 통해서 접근해야 한다. 안 그러면 불필요한 데이터 lock이 걸릴 수 있다.
+
+```sql
+SELECT * FROM POST WHERE created_at = '2024-02-03 23:59:59' for update;
+```
+위 쿼리로 lock 걸어버리면 테이블 전체 레코드에 락이 걸리게 된다. (아주 위험한 상황)
+
+찾아보면 좋을 것들
+- Java의 동시성 이슈 제어방법
+- 분산환경에서의 동시성 이슈 제어방법
+- MySQL의 넥스트 키락이 등장한 배경
+- MySQL 외래키로 인한 잠금
+- MySQL 데드락
