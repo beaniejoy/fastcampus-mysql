@@ -75,3 +75,18 @@ create table PostLike
     constraint PostLike_id_uindex
         primary key (id)
 );
+
+-- Post 테이블에 likeCount 추가
+alter table Post add column likeCount int;
+-- 낙관적 락을 위한 version 필드 추가
+alter table Post add column version int default 0;
+
+create table PostLike
+(
+    id int auto_increment,
+    memberId int not null,
+    postId int not null,
+    createdAt datetime not null,
+    constraint PostLike_id_uindex
+        primary key (id)
+);

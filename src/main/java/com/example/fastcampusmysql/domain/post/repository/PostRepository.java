@@ -1,15 +1,14 @@
 package com.example.fastcampusmysql.domain.post.repository;
 
-import com.example.fastcampusmysql.utils.CursorRequest;
-import com.example.fastcampusmysql.utils.PageHelper;
 import com.example.fastcampusmysql.domain.post.dto.DailyPostCount;
 import com.example.fastcampusmysql.domain.post.dto.DailyPostCountRequest;
 import com.example.fastcampusmysql.domain.post.entity.Post;
+import com.example.fastcampusmysql.utils.PageHelper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -30,13 +29,15 @@ public class PostRepository {
 
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
 
-    private static final RowMapper<Post> POST_ROW_MAPPER = (rs, rowNum) -> new Post(
-        rs.getLong("id"),
-        rs.getLong("memberId"),
-        rs.getString("contents"),
-        rs.getObject("createdDate", LocalDate.class),
-        rs.getObject("createdAt", LocalDateTime.class)
-    );
+    private static final RowMapper<Post> POST_ROW_MAPPER = (rs, rowNum) -> Post.builder()
+        .id(rs.getLong("id"))
+        .memberId(rs.getLong("memberId"))
+        .contents(rs.getString("contents"))
+        .createdDate(rs.getObject("createdDate", LocalDate.class))
+        .likeCount(rs.getLong("likeCount"))
+        .createdAt(rs.getObject("createdAt", LocalDateTime.class))
+        .version(rs.getLong("version"))
+        .build();
 
     private static final RowMapper<DailyPostCount> DAILY_POST_ROW_MAPPER = (rs, rowNum) -> new DailyPostCount(
         rs.getLong("memberId"),
@@ -44,7 +45,16 @@ public class PostRepository {
         rs.getLong("count")
     );
 
+    public Optional<Post> findById(Long postId, Boolean requiredLock) {
+        var sql = String.format("SELECT * FROM %s WHERE id = :postId ", TABLE);
+        if (requiredLock) {
+            sql += "FOR UPDATE";
+        }
+        var params = new MapSqlParameterSource().addValue("postId", postId);
+        Post post = namedParameterJdbcTemplate.queryForObject(sql, params, POST_ROW_MAPPER);
 
+        return Optional.ofNullable(post);
+    }
 
     public List<DailyPostCount> groupByCreatedDate(DailyPostCountRequest request) {
         var sql = String.format("""
@@ -97,7 +107,8 @@ public class PostRepository {
     }
 
     // cursor 방식
-    public List<Post> findAllByLessThanIdAndMemberIdAndOrderByIdDesc(Long id, Long memberId, Long size) {
+    public List<Post> findAllByLessThanIdAndMemberIdAndOrderByIdDesc(Long id, Long memberId,
+        Long size) {
         var params = new MapSqlParameterSource()
             .addValue("memberId", memberId)
             .addValue("id", id)
@@ -135,7 +146,8 @@ public class PostRepository {
         return namedParameterJdbcTemplate.query(sql, params, POST_ROW_MAPPER);
     }
 
-    public List<Post> findAllByLessThanIdAndInMemberIdsAndOrderByIdDesc(Long id, List<Long> memberIds, Long size) {
+    public List<Post> findAllByLessThanIdAndInMemberIdsAndOrderByIdDesc(Long id,
+        List<Long> memberIds, Long size) {
         if (memberIds.isEmpty()) {
             return Collections.emptyList();
         }
@@ -192,7 +204,7 @@ public class PostRepository {
             return insert(post);
         }
 
-        throw new UnsupportedOperationException("Post는 갱신을 지원하지 않습니다.");
+        return update(post);
     }
 
     private Post insert(Post post) {
@@ -225,5 +237,27 @@ public class PostRepository {
             .toArray(SqlParameterSource[]::new);
 
         namedParameterJdbcTemplate.batchUpdate(sql, params);
+    }
+
+    private Post update(Post post) {
+        var sql = String.format("""
+            UPDATE %s SET
+            memberId = :memberId,
+            contents = :contents,
+            createdDate = :createdDate,
+            likeCount = :likeCount
+            version = :version + 1
+            WHERE id = :id
+            AND version = :version
+        """, TABLE);
+
+        SqlParameterSource params = new BeanPropertySqlParameterSource(post);
+        int updatedCount = namedParameterJdbcTemplate.update(sql, params);
+
+        if (updatedCount == 0) {
+            throw new RuntimeException("갱신 실패");
+        }
+
+        return post;
     }
 }
